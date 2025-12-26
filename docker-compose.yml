@@ -1,0 +1,43 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: namphong_db
+    environment:
+      POSTGRES_USER: namphong
+      POSTGRES_PASSWORD: namphong123
+      POSTGRES_DB: namphong_store
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U namphong"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: namphong_app
+    environment:
+      DATABASE_URL: postgresql://namphong:namphong123@postgres:5432/namphong_store
+      NODE_ENV: development
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+      - uploads:/app/public/uploads
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "npm run migrate:deploy && npm run seed && npm run dev"
+
+volumes:
+  postgres_data:
+  uploads:

@@ -1,0 +1,313 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  SALES
+  TECH
+  CUSTOMER
+}
+
+enum OrderStatus {
+  NEW
+  CONFIRMED
+  SHIPPING
+  DELIVERED
+  CANCELLED_BY_CUSTOMER
+  CANCELLED_BY_SHOP
+}
+
+enum ReturnStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum WarrantyStatus {
+  ACTIVE
+  EXPIRED
+  REPLACED
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password_hash String
+  full_name     String
+  phone         String?
+  address       String?
+  city          String?
+  district      String?
+  ward          String?
+  role          Role     @default(SALES)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  audit_logs AuditLog[]
+  event_logs EventLog[]
+  orders     Order[]
+  coupon_usages CouponUsage[]
+
+  @@map("users")
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  image_url   String?
+  parent_id   String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  parent   Category?  @relation("CategoryHierarchy", fields: [parent_id], references: [id])
+  children Category[] @relation("CategoryHierarchy")
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id                String   @id @default(cuid())
+  category_id       String
+  name              String
+  slug              String   @unique
+  brand             String?
+  description       String?
+  specs             Json?    // key-value pairs
+  gifts             Json?    // array of gift items
+  images            Json?    // array of image URLs
+  price_original    Decimal  @db.Decimal(12, 0)
+  price_sale        Decimal  @db.Decimal(12, 0)
+  discount_percent  Int      @default(0)
+  promo_start       DateTime?
+  promo_end         DateTime?
+  warranty_months   Int      @default(12)
+  stock_quantity    Int      @default(0)
+  is_active         Boolean  @default(true)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  category    Category      @relation(fields: [category_id], references: [id])
+  order_items OrderItem[]
+  audit_logs  AuditLog[]
+  reviews     Review[]
+
+  @@index([category_id])
+  @@index([slug])
+  @@index([is_active])
+  @@map("products")
+}
+
+model Order {
+  id               String      @id @default(cuid())
+  order_code       String      @unique
+  user_id          String?
+  customer_name    String
+  customer_phone   String
+  customer_email   String?
+  customer_address String
+  customer_ward    String?
+  customer_district String?
+  customer_city    String
+  notes            String?
+  status           OrderStatus @default(NEW)
+  cancel_reason    String?
+  total_amount     Decimal     @db.Decimal(12, 0)
+  coupon_code      String?
+  discount_amount  Decimal     @default(0) @db.Decimal(12, 0)
+  delivered_date   DateTime?
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+
+  user            User?           @relation(fields: [user_id], references: [id])
+  items           OrderItem[]
+  return_requests ReturnRequest[]
+  event_logs      EventLog[]
+  reviews         Review[]
+  coupon_usages   CouponUsage[]
+
+  @@index([customer_phone])
+  @@index([order_code])
+  @@index([status])
+  @@index([user_id])
+  @@map("orders")
+}
+
+model OrderItem {
+  id                      String   @id @default(cuid())
+  order_id                String
+  product_id              String
+  snapshot_name           String
+  quantity                Int
+  unit_price_at_purchase  Decimal  @db.Decimal(12, 0)
+  promo_snapshot          Json?    // snapshot of promo details at purchase
+  warranty_months_snapshot Int     @default(12) // warranty period at purchase time
+  created_at              DateTime @default(now())
+
+  order          Order           @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  product        Product         @relation(fields: [product_id], references: [id])
+  warranty_units WarrantyUnit[]
+
+  @@index([order_id])
+  @@index([product_id])
+  @@map("order_items")
+}
+
+model WarrantyUnit {
+  id                         String         @id @default(cuid())
+  order_item_id              String
+  unit_no                    Int            // 1, 2, 3... for qty > 1
+  warranty_code_auto         String         @unique
+  serial_no                  String?        @unique
+  warranty_months_at_purchase Int
+  start_date                 DateTime
+  end_date                   DateTime
+  status                     WarrantyStatus @default(ACTIVE)
+  replaced_by                String?        @unique
+  created_at                 DateTime       @default(now())
+  updated_at                 DateTime       @updatedAt
+
+  order_item         OrderItem       @relation(fields: [order_item_id], references: [id])
+  replacement        WarrantyUnit?   @relation("WarrantyReplacement", fields: [replaced_by], references: [id])
+  replaced_old_unit  WarrantyUnit?   @relation("WarrantyReplacement")
+  return_requests    ReturnRequest[]
+
+  @@unique([order_item_id, unit_no])
+  @@index([warranty_code_auto])
+  @@index([serial_no])
+  @@map("warranty_units")
+}
+
+model ReturnRequest {
+  id               String       @id @default(cuid())
+  order_id         String
+  warranty_unit_id String?
+  reason           String
+  images           Json?        // array of uploaded image paths
+  status           ReturnStatus @default(PENDING)
+  admin_note       String?
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+
+  order         Order         @relation(fields: [order_id], references: [id])
+  warranty_unit WarrantyUnit? @relation(fields: [warranty_unit_id], references: [id])
+  event_logs    EventLog[]
+
+  @@index([order_id])
+  @@index([status])
+  @@map("return_requests")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  product_id     String
+  user_id        String
+  action         String   // "UPDATE", "CREATE"
+  before_json    Json?
+  after_json     Json
+  changed_fields Json?    // array of field names changed
+  created_at     DateTime @default(now())
+
+  product Product @relation(fields: [product_id], references: [id])
+  user    User    @relation(fields: [user_id], references: [id])
+
+  @@index([product_id])
+  @@index([user_id])
+  @@index([created_at])
+  @@map("audit_logs")
+}
+
+model EventLog {
+  id                String   @id @default(cuid())
+  order_id          String?
+  return_request_id String?
+  user_id           String?
+  event_type        String   // ORDER_STATUS_CHANGED, WARRANTY_CODES_GENERATED, etc.
+  metadata          Json?
+  created_at        DateTime @default(now())
+
+  order          Order?         @relation(fields: [order_id], references: [id])
+  return_request ReturnRequest? @relation(fields: [return_request_id], references: [id])
+  user           User?          @relation(fields: [user_id], references: [id])
+
+  @@index([order_id])
+  @@index([return_request_id])
+  @@index([event_type])
+  @@index([created_at])
+  @@map("event_logs")
+}
+
+model Review {
+  id            String   @id @default(cuid())
+  product_id    String
+  order_id      String?
+  customer_name String
+  customer_phone String
+  rating        Int      // 1-5 stars
+  comment       String?
+  helpful_votes Int      @default(0)
+  is_verified   Boolean  @default(false) // if linked to actual purchase
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  product Product @relation(fields: [product_id], references: [id])
+  order   Order?  @relation(fields: [order_id], references: [id])
+
+  @@index([product_id])
+  @@index([order_id])
+  @@index([rating])
+  @@index([is_verified])
+  @@map("reviews")
+}
+
+model Coupon {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  name            String
+  description     String?
+  discount_type   String   // "percentage" or "fixed"
+  discount_value  Decimal  @db.Decimal(12, 0)
+  min_order_value Decimal? @db.Decimal(12, 0)
+  max_discount    Decimal? @db.Decimal(12, 0) // max discount for percentage type
+  usage_limit     Int?     // null = unlimited
+  used_count      Int      @default(0)
+  is_active       Boolean  @default(true)
+  valid_from      DateTime
+  valid_until     DateTime
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  usages          CouponUsage[]
+
+  @@index([code])
+  @@index([is_active])
+  @@index([valid_from])
+  @@index([valid_until])
+  @@map("coupons")
+}
+
+model CouponUsage {
+  id        String   @id @default(cuid())
+  coupon_id String
+  user_id   String
+  order_id  String
+  used_at   DateTime @default(now())
+
+  coupon Coupon @relation(fields: [coupon_id], references: [id])
+  user   User   @relation(fields: [user_id], references: [id])
+  order  Order  @relation(fields: [order_id], references: [id])
+
+  @@unique([coupon_id, user_id]) // Ensure one use per user per coupon
+  @@index([coupon_id])
+  @@index([user_id])
+  @@map("coupon_usages")
+}
