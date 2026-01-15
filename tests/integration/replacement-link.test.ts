@@ -20,6 +20,9 @@ describe('Replacement Link Test', () => {
     await prisma.returnRequest.deleteMany({});
     await prisma.orderItem.deleteMany({});
     await prisma.order.deleteMany({});
+    await prisma.auditLog.deleteMany({});
+    await prisma.review.deleteMany({});
+    await prisma.inventoryItem.deleteMany({});
     await prisma.product.deleteMany({});
 
     // Create test category
@@ -81,6 +84,8 @@ describe('Replacement Link Test', () => {
     // Create original warranty
     const endDate = new Date(deliveredDate);
     endDate.setMonth(endDate.getMonth() + 12);
+    const exchangeUntil = new Date(deliveredDate);
+    exchangeUntil.setMonth(exchangeUntil.getMonth() + 1);
 
     const oldWarranty = await prisma.warrantyUnit.create({
       data: {
@@ -90,6 +95,7 @@ describe('Replacement Link Test', () => {
         warranty_months_at_purchase: 12,
         start_date: deliveredDate,
         end_date: endDate,
+        exchange_until: exchangeUntil,
         status: 'ACTIVE',
       },
     });
@@ -118,6 +124,8 @@ describe('Replacement Link Test', () => {
     const replacementDate = new Date();
     const newEndDate = new Date(replacementDate);
     newEndDate.setMonth(newEndDate.getMonth() + 12);
+    const newExchangeUntil = new Date(replacementDate);
+    newExchangeUntil.setMonth(newExchangeUntil.getMonth() + 1);
 
     const newWarranty = await prisma.warrantyUnit.create({
       data: {
@@ -127,6 +135,7 @@ describe('Replacement Link Test', () => {
         warranty_months_at_purchase: 12,
         start_date: replacementDate,
         end_date: newEndDate,
+        exchange_until: newExchangeUntil,
         status: 'ACTIVE',
       },
     });

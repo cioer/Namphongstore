@@ -21,7 +21,11 @@ describe('Snapshot Integrity Test', () => {
     await prisma.warrantyUnit.deleteMany({});
     await prisma.orderItem.deleteMany({});
     await prisma.order.deleteMany({});
+    await prisma.auditLog.deleteMany({});
+    await prisma.review.deleteMany({});
+    await prisma.inventoryItem.deleteMany({});
     await prisma.product.deleteMany({});
+    await prisma.category.deleteMany({});
 
     // Create test category
     const category = await prisma.category.create({
@@ -82,6 +86,8 @@ describe('Snapshot Integrity Test', () => {
     const startDate = new Date();
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + originalWarrantyMonths);
+    const exchangeUntil = new Date(startDate);
+    exchangeUntil.setMonth(exchangeUntil.getMonth() + 1);
 
     const warranty = await prisma.warrantyUnit.create({
       data: {
@@ -91,6 +97,7 @@ describe('Snapshot Integrity Test', () => {
         warranty_months_at_purchase: originalWarrantyMonths,
         start_date: startDate,
         end_date: endDate,
+        exchange_until: exchangeUntil,
         status: 'ACTIVE',
       },
     });

@@ -103,6 +103,45 @@ function generateSpecs(categorySlug: string) {
   return specs;
 }
 
+function generateRichDescription(categorySlug: string, productName: string, brand: string, specs: any) {
+  let specsText = '';
+  for (const [key, value] of Object.entries(specs)) {
+      specsText += `- ${key}: ${value}\n`;
+  }
+
+  return `🔥 ${productName.toUpperCase()} - CHÍNH HÃNG ${brand.toUpperCase()} 🔥
+
+✅ ĐẶC ĐIỂM NỔI BẬT:
+• Thiết kế sang trọng, hiện đại, phù hợp với mọi không gian nội thất Á Đông.
+• Công nghệ Inverter tiết kiệm điện năng tối ưu, vận hành êm ái.
+• Chất liệu cao cấp, bền bỉ, dễ dàng vệ sinh và bảo quản.
+• Tích hợp nhiều tính năng thông minh, mang lại tiện nghi cho gia đình.
+• Màu sắc trang nhã, tạo điểm nhấn tinh tế cho ngôi nhà của bạn.
+
+⚙️ THÔNG SỐ KỸ THUẬT CHI TIẾT:
+${specsText}- Thương hiệu: ${brand}
+- Tình trạng: Mới 100%, Nguyên seal
+- Loại bảo hành: Bảo hành điện tử chính hãng
+
+📦 BỘ SẢN PHẨM BAO GỒM:
+• 01 ${productName}
+• 01 Sách hướng dẫn sử dụng tiếng Việt
+• 01 Phiếu bảo hành (hoặc kích hoạt điện tử)
+• Bộ phụ kiện lắp đặt tiêu chuẩn đi kèm
+
+🛡️ CAM KẾT TỪ ĐIỆN MÁY NAM PHONG:
+⭐ Hàng chính hãng 100% - Hoàn tiền 200% nếu phát hiện hàng giả.
+⭐ Bảo hành 1 đổi 1 trong 30 ngày đầu nếu có lỗi kỹ thuật.
+⭐ Giao hàng nhanh chóng - Hỗ trợ lắp đặt tận nơi.
+⭐ Tư vấn kỹ thuật 24/7 nhiệt tình, chu đáo.
+
+🎁 ƯU ĐÃI ĐẶC BIỆT DỊP TẾT:
+🧧 Tặng kèm bao lì xì may mắn.
+🧧 Hỗ trợ trả góp 0% lãi suất.
+
+#${brand.replace(/\s+/g, '')} #${categorySlug.replace(/-/g, '')} #dienmaynamphong #tet2026 #hangchinhhang #uudai #giare #thietbidienmay`;
+}
+
 const gifts = [
   'Tặng nồi nấu phở',
   'Tặng bộ dụng cụ nhà bếp',
@@ -121,12 +160,38 @@ function randomGifts() {
   return selected;
 }
 
-// Sample image URLs (using placeholder)
-function productImages(count: number = 3) {
-  const urls = [];
-  for (let i = 0; i < count; i++) {
-    urls.push(`https://via.placeholder.com/400x400.png?text=Product+${i + 1}`);
+// Specific images for categories (Unsplash Source)
+const categoryImages = {
+  'tu-lanh': [],
+  'may-giat': [],
+  'dieu-hoa': [],
+  'tivi': [],
+  'bep-dien': [],
+  'noi-com-dien': []
+};
+
+function getCategoryThumbnail(slug: string) {
+  const images = categoryImages[slug as keyof typeof categoryImages];
+  if (images && images.length > 0) return images[0];
+  return 'https://via.placeholder.com/200x200.png?text=' + slug;
+}
+
+function productImages(categorySlug: string, count: number = 3) {
+  const urls: string[] = [];
+  const pool = categoryImages[categorySlug as keyof typeof categoryImages] || [];
+  
+  if (pool.length === 0) {
+      for (let i = 0; i < count; i++) {
+        urls.push(`https://via.placeholder.com/400x400.png?text=${categorySlug}+${i + 1}`);
+      }
+      return urls;
   }
+
+  // Pick random images from pool, allow duplicates if pool is small
+  for (let i = 0; i < count; i++) {
+    urls.push(pool[Math.floor(Math.random() * pool.length)]);
+  }
+  
   return urls;
 }
 
@@ -136,8 +201,13 @@ async function main() {
   // Clean existing data
   await prisma.eventLog.deleteMany();
   await prisma.auditLog.deleteMany();
+  await prisma.warrantyService.deleteMany();
   await prisma.returnRequest.deleteMany();
   await prisma.warrantyUnit.deleteMany();
+  await prisma.review.deleteMany();
+  await prisma.couponUsage.deleteMany();
+  await prisma.coupon.deleteMany();
+  await prisma.inventoryItem.deleteMany();
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
   await prisma.product.deleteMany();
@@ -187,7 +257,7 @@ async function main() {
         name: cat.name,
         slug: cat.slug,
         description: cat.desc,
-        image_url: `https://via.placeholder.com/200x200.png?text=${encodeURIComponent(cat.name)}`,
+        image_url: getCategoryThumbnail(cat.slug),
       },
     });
     categories.push(category);
@@ -216,22 +286,24 @@ async function main() {
     const productName = `${brand} ${category.name} Model ${i + 1}`;
     const slug = `${brand.toLowerCase()}-${category.slug}-${i + 1}`.replace(/\s+/g, '-');
 
+    const specs = generateSpecs(category.slug);
     const product = await prisma.product.create({
       data: {
         category_id: category.id,
         name: productName,
         slug,
         brand,
-        description: `Mô tả chi tiết cho ${productName}. Sản phẩm chất lượng cao, tiết kiệm điện, bảo hành chính hãng.`,
-        specs: generateSpecs(category.slug),
+        description: generateRichDescription(category.slug, productName, brand, specs),
+        specs: specs,
         gifts: randomGifts(),
-        images: productImages(3),
+        images: productImages(category.slug, 3),
         price_original: priceOriginal,
         price_sale: priceSale,
         discount_percent: discountPercent,
         promo_start: promoStart,
         promo_end: promoEnd,
         warranty_months: [12, 24, 36][Math.floor(Math.random() * 3)],
+        warranty_exchange_months: [1, 3][Math.floor(Math.random() * 2)],
         stock_quantity: Math.floor(Math.random() * 100) + 10,
         is_active: true,
       },
@@ -285,6 +357,7 @@ async function main() {
           promo_end: product.promo_end,
         } : Prisma.JsonNull,
         warranty_months_snapshot: product.warranty_months,
+        warranty_exchange_months_snapshot: product.warranty_exchange_months,
       });
     }
 
@@ -331,6 +404,9 @@ async function main() {
           const warrantyCode = `NP-WTY-${deliveredDate.getFullYear().toString().slice(-2)}${(deliveredDate.getMonth() + 1).toString().padStart(2, '0')}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
           const endDate = new Date(deliveredDate);
           endDate.setMonth(endDate.getMonth() + warrantyMonths);
+          
+          const exchangeDate = new Date(deliveredDate);
+          exchangeDate.setMonth(exchangeDate.getMonth() + (product?.warranty_exchange_months || 1));
 
           // Some warranties might be expired or replaced for demo
           const now = new Date();
@@ -346,6 +422,7 @@ async function main() {
               warranty_months_at_purchase: warrantyMonths,
               start_date: deliveredDate,
               end_date: endDate,
+              exchange_until: exchangeDate,
               status: warrantyStatus as any,
             },
           });
@@ -449,6 +526,124 @@ async function main() {
     }
     console.log(`✅ Created ${returnCount} return requests with event logs`);
   }
+
+  // 5b. Create Coupons
+  const coupons = [
+    {
+      code: 'WELCOME10',
+      name: 'Chào mừng thành viên mới',
+      description: 'Giảm 10% cho đơn hàng đầu tiên',
+      discount_type: 'percentage',
+      discount_value: 10,
+      max_discount: 500000,
+      min_order_value: 0,
+      valid_from: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000), // 1 year ago
+      valid_until: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year later
+      is_active: true,
+      usage_limit: null,
+    },
+    {
+      code: 'SUMMER2025',
+      name: 'Khuyến mãi mùa hè',
+      description: 'Giảm 200k tiền mặt',
+      discount_type: 'fixed',
+      discount_value: 200000,
+      min_order_value: 2000000,
+      valid_from: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+      valid_until: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // Expired
+      is_active: false,
+      usage_limit: 100,
+    },
+    {
+      code: 'FLASH500',
+      name: 'Flash Sale',
+      description: 'Giảm 500k cho đơn từ 10 triệu',
+      discount_type: 'fixed',
+      discount_value: 500000,
+      min_order_value: 10000000,
+      valid_from: new Date(),
+      valid_until: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      is_active: true,
+      usage_limit: 50,
+    },
+  ];
+
+  for (const couponData of coupons) {
+    await prisma.coupon.create({
+      data: couponData,
+    });
+  }
+  console.log('✅ Created 3 coupons');
+
+  // 5c. Create Reviews
+  let reviewCount = 0;
+  for (const order of deliveredOrders) {
+    // 60% chance to review
+    if (Math.random() > 0.4) {
+      for (const item of order.items) {
+          const rating = Math.floor(Math.random() * 5) + 1; // 1-5
+          const comments = [
+            'Sản phẩm tuyệt vời, giao hàng nhanh.',
+            'Dùng tốt, giá cả hợp lý.',
+            'Không hài lòng lắm về đóng gói.',
+            'Chất lượng ổn trong tầm giá.',
+            'Dịch vụ bảo hành của shop rất tốt.',
+            'Sẽ ủng hộ lần sau.',
+            'Hàng chính hãng, check serial chuẩn.',
+          ];
+
+          await prisma.review.create({
+            data: {
+              product_id: item.product_id,
+              order_id: order.id,
+              customer_name: order.customer_name,
+              customer_phone: order.customer_phone,
+              rating: rating,
+              comment: comments[Math.floor(Math.random() * comments.length)],
+              is_verified: true,
+              helpful_votes: Math.floor(Math.random() * 10),
+              created_at: new Date(order.delivered_date!.getTime() + Math.random() * 7 * 24 * 60 * 60 * 1000),
+            }
+          });
+          reviewCount++;
+      }
+    }
+  }
+  console.log(`✅ Created ${reviewCount} product reviews`);
+
+  // 5d. Create Warranty Services (Repair Requests)
+  let serviceCount = 0;
+  // Get all active warranty units
+  const activeWarrantyUnits = await prisma.warrantyUnit.findMany({
+    where: { status: 'ACTIVE' },
+    take: 15,
+  });
+
+  const serviceIssues = [
+    'Máy không hoạt động ổn định',
+    'Phát ra tiếng ồn lạ khi vận hành',
+    'Màn hình hiển thị chập chờn',
+    'Cần bảo dưỡng định kỳ',
+    'Hư hỏng linh kiện do sự cố điện',
+  ];
+
+  for (const unit of activeWarrantyUnits) {
+     const status = ['PENDING', 'IN_PROGRESS', 'COMPLETED'][Math.floor(Math.random() * 3)];
+     
+     const service = await prisma.warrantyService.create({
+        data: {
+          warranty_unit_id: unit.id,
+          type: 'REPAIR',
+          status: status as any,
+          issue_description: serviceIssues[Math.floor(Math.random() * serviceIssues.length)],
+          technician_note: status === 'COMPLETED' ? 'Đã thay thế linh kiện và kiểm tra vận hành.' : null,
+          created_at: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
+        }
+     });
+     serviceCount++;
+  }
+  console.log(`✅ Created ${serviceCount} warranty repair services`);
+
 
   // 6. Create comprehensive Audit Logs for product changes (50 entries)
   const fieldChanges = [

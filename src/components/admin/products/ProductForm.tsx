@@ -51,6 +51,7 @@ export default function ProductForm({ initialData, mode, productId }: ProductFor
         price_sale: Number(initialData.price_sale),
         promo_start: initialData.promo_start ? dayjs.utc(initialData.promo_start) : null,
         promo_end: initialData.promo_end ? dayjs.utc(initialData.promo_end) : null,
+        warranty_exchange_months: initialData.warranty_exchange_months ?? 1,
         specs: initialData.specs ? Object.entries(initialData.specs).map(([key, value]) => ({ key, value })) : [],
         gifts: initialData.gifts || [],
         images: initialData.images || [],
@@ -119,6 +120,52 @@ export default function ProductForm({ initialData, mode, productId }: ProductFor
     setFileList(newFileList);
   };
 
+  // Auto-calculation handlers
+  const onOriginalPriceChange = (value: number | null) => {
+    if (!value) return;
+    const discount = form.getFieldValue('discount_percent');
+    const sale = form.getFieldValue('price_sale');
+    
+    // Priority: If Discount exists, update Sale Price. If not, but Sale Price exists, update Discount.
+    if (discount !== undefined && discount !== null && discount > 0) {
+       const newSale = value * (1 - discount / 100);
+       form.setFieldsValue({ price_sale: Math.round(newSale) });
+    } else if (sale) {
+       const newDiscount = ((value - sale) / value) * 100;
+       form.setFieldsValue({ discount_percent: Number(newDiscount.toFixed(2)) });
+    }
+  };
+
+  const onSalePriceChange = (value: number | null) => {
+    if (!value) return;
+    const original = form.getFieldValue('price_original');
+    const discount = form.getFieldValue('discount_percent');
+
+    // Priority: If Original exists, update Discount. If not, but Discount exists, update Original.
+    if (original) {
+        const newDiscount = ((original - value) / original) * 100;
+        form.setFieldsValue({ discount_percent: Number(newDiscount.toFixed(2)) });
+    } else if (discount !== undefined && discount !== null && discount > 0) {
+        const newOriginal = value / (1 - discount / 100);
+        form.setFieldsValue({ price_original: Math.round(newOriginal) });
+    }
+  };
+
+  const onDiscountChange = (value: number | null) => {
+    if (value === null) return;
+    const original = form.getFieldValue('price_original');
+    const sale = form.getFieldValue('price_sale');
+
+    // Priority: If Original exists, update Sale. If not, but Sale exists, update Original.
+    if (original) {
+        const newSale = original * (1 - value / 100);
+        form.setFieldsValue({ price_sale: Math.round(newSale) });
+    } else if (sale) {
+        const newOriginal = sale / (1 - value / 100);
+        form.setFieldsValue({ price_original: Math.round(newOriginal) });
+    }
+  };
+
   const onFinish = async (values: any) => {
     setLoading(true);
     try {
@@ -175,6 +222,7 @@ export default function ProductForm({ initialData, mode, productId }: ProductFor
       initialValues={{
         is_active: true,
         warranty_months: 12,
+        warranty_exchange_months: 1,
         stock_quantity: 0,
         discount_percent: 0,
         specs: [],
@@ -249,6 +297,7 @@ export default function ProductForm({ initialData, mode, productId }: ProductFor
               style={{ width: '100%' }}
               formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               parser={(value: any) => value!.replace(/,/g, '')}
+              onChange={onOriginalPriceChange}
             />
           </Form.Item>
 
@@ -262,6 +311,7 @@ export default function ProductForm({ initialData, mode, productId }: ProductFor
               style={{ width: '100%' }}
               formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               parser={(value: any) => value!.replace(/,/g, '')}
+              onChange={onSalePriceChange}
             />
           </Form.Item>
 
@@ -269,7 +319,12 @@ export default function ProductForm({ initialData, mode, productId }: ProductFor
             label="Giảm giá (%)"
             name="discount_percent"
           >
-            <InputNumber min={0} max={100} style={{ width: '100%' }} />
+            <InputNumber 
+              min={0} 
+              max={100} 
+              style={{ width: '100%' }} 
+              onChange={onDiscountChange}
+            />
           </Form.Item>
 
           <Space.Compact style={{ width: '100%' }}>
@@ -395,6 +450,27 @@ export default function ProductForm({ initialData, mode, productId }: ProductFor
           rules={[{ required: true, message: 'Vui lòng nhập thời hạn bảo hành' }]}
         >
           <InputNumber min={0} max={120} style={{ width: '100%' }} />
+        </Form.Item>
+
+        <Form.Item
+          label="Thời hạn đổi sản phẩm mới (tháng đầu)"
+          name="warranty_exchange_months"
+          rules={[{ required: true, message: 'Vui lòng nhập số tháng đổi sản phẩm' }]}
+        >
+          <InputNumber min={0} max={120} style={{ width: '100%' }} />
+        </Form.Item>
+
+        <Form.Item shouldUpdate>
+          {() => {
+            const x = form.getFieldValue('warranty_exchange_months');
+            const y = form.getFieldValue('warranty_months');
+            const invalid = typeof x === 'number' && typeof y === 'number' && x >= y;
+            return invalid ? (
+              <div style={{ color: 'red' }}>
+                Lưu ý: Tháng đổi (x) phải nhỏ hơn tổng bảo hành (y).
+              </div>
+            ) : null;
+          }}
         </Form.Item>
       </Card>
 

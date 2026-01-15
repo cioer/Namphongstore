@@ -15,7 +15,11 @@ describe('Return Window Test (30 days)', () => {
     await prisma.warrantyUnit.deleteMany({});
     await prisma.orderItem.deleteMany({});
     await prisma.order.deleteMany({});
+    await prisma.auditLog.deleteMany({});
+    await prisma.review.deleteMany({});
+    await prisma.inventoryItem.deleteMany({});
     await prisma.product.deleteMany({});
+    await prisma.category.deleteMany({});
 
     // Create test category
     const category = await prisma.category.create({

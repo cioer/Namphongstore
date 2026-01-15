@@ -34,6 +34,33 @@ enum WarrantyStatus {
   ACTIVE
   EXPIRED
   REPLACED
+  VOIDED
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  user_id     String
+  title       String
+  message     String
+  type        String   // system, order, warranty
+  link        String?
+  is_read     Boolean  @default(false)
+  created_at  DateTime @default(now())
+
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+  @@index([user_id])
+}
+
+enum ServiceType {
+  REPAIR
+}
+
+enum ServiceStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
 }
 
 model User {
@@ -54,6 +81,7 @@ model User {
   event_logs EventLog[]
   orders     Order[]
   coupon_usages CouponUsage[]
+  notifications Notification[]
 
   @@map("users")
 }
@@ -80,6 +108,7 @@ model Product {
   category_id       String
   name              String
   slug              String   @unique
+  sku               String?  @unique
   brand             String?
   description       String?
   specs             Json?    // key-value pairs
@@ -90,21 +119,51 @@ model Product {
   discount_percent  Int      @default(0)
   promo_start       DateTime?
   promo_end         DateTime?
-  warranty_months   Int      @default(12)
+  warranty_months   Int      @default(12) // Tổng thời hạn bảo hành (y)
+  warranty_exchange_months Int @default(1) // Tháng đổi trả đầu (x)
   stock_quantity    Int      @default(0)
   is_active         Boolean  @default(true)
   created_at        DateTime @default(now())
   updated_at        DateTime @updatedAt
 
-  category    Category      @relation(fields: [category_id], references: [id])
-  order_items OrderItem[]
-  audit_logs  AuditLog[]
-  reviews     Review[]
+  category       Category        @relation(fields: [category_id], references: [id])
+  order_items    OrderItem[]
+  audit_logs     AuditLog[]
+  reviews        Review[]
+  inventory_items InventoryItem[]
 
   @@index([category_id])
   @@index([slug])
+  @@index([sku])
   @@index([is_active])
   @@map("products")
+}
+
+enum InventoryStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  RETURNED
+  DEFECTIVE
+}
+
+model InventoryItem {
+  id          String          @id @default(cuid())
+  product_id  String
+  serial_number String        @unique
+  status      InventoryStatus @default(AVAILABLE)
+  order_item_id String?       @unique // Link to order when sold
+  import_batch String?        // Optional: track import batch ID
+  notes       String?
+  created_at  DateTime        @default(now())
+  updated_at  DateTime        @updatedAt
+
+  product    Product    @relation(fields: [product_id], references: [id])
+  order_item OrderItem? @relation(fields: [order_item_id], references: [id])
+
+  @@index([product_id])
+  @@index([status])
+  @@map("inventory_items")
 }
 
 model Order {
@@ -150,12 +209,14 @@ model OrderItem {
   quantity                Int
   unit_price_at_purchase  Decimal  @db.Decimal(12, 0)
   promo_snapshot          Json?    // snapshot of promo details at purchase
-  warranty_months_snapshot Int     @default(12) // warranty period at purchase time
+  warranty_months_snapshot Int     @default(12) // tổng thời hạn bảo hành tại thời điểm mua
+  warranty_exchange_months_snapshot Int @default(1) // thời hạn đổi trả tại thời điểm mua
   created_at              DateTime @default(now())
 
   order          Order           @relation(fields: [order_id], references: [id], onDelete: Cascade)
   product        Product         @relation(fields: [product_id], references: [id])
   warranty_units WarrantyUnit[]
+  inventory_item InventoryItem?
 
   @@index([order_id])
   @@index([product_id])
@@ -171,6 +232,7 @@ model WarrantyUnit {
   warranty_months_at_purchase Int
   start_date                 DateTime
   end_date                   DateTime
+  exchange_until             DateTime       // thời hạn cuối cùng được đổi trả (start_date + x tháng)
   status                     WarrantyStatus @default(ACTIVE)
   replaced_by                String?        @unique
   created_at                 DateTime       @default(now())
@@ -180,11 +242,29 @@ model WarrantyUnit {
   replacement        WarrantyUnit?   @relation("WarrantyReplacement", fields: [replaced_by], references: [id])
   replaced_old_unit  WarrantyUnit?   @relation("WarrantyReplacement")
   return_requests    ReturnRequest[]
+  services           WarrantyService[]
 
-  @@unique([order_item_id, unit_no])
+  @@index([order_item_id, unit_no])
   @@index([warranty_code_auto])
   @@index([serial_no])
   @@map("warranty_units")
+}
+
+model WarrantyService {
+  id                String        @id @default(cuid())
+  warranty_unit_id  String
+  type              ServiceType   @default(REPAIR)
+  status            ServiceStatus @default(PENDING)
+  issue_description String
+  technician_note   String?
+  created_at        DateTime      @default(now())
+  updated_at        DateTime      @updatedAt
+
+  warranty_unit WarrantyUnit @relation(fields: [warranty_unit_id], references: [id])
+
+  @@index([warranty_unit_id])
+  @@index([status])
+  @@map("warranty_services")
 }
 
 model ReturnRequest {

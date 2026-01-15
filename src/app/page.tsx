@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import HomeContent from '@/components/shop/HomeContent';
+import { getBestSellingProducts } from '@/services/product.service';
 
 export const revalidate = 60; // Revalidate every 60 seconds (ISR)
 
@@ -60,12 +61,8 @@ async function getHomeData() {
       orderBy: { discount_percent: 'desc' },
       take: 8,
     }),
-    // Get best-sellers (most recent products as proxy)
-    prisma.product.findMany({
-      where: { is_active: true },
-      orderBy: { created_at: 'desc' },
-      take: 8,
-    }),
+    // Get best-sellers (by sales volume last month)
+    getBestSellingProducts(8),
   ]);
 
   // Serialize to plain JSON to avoid RSC serialization issues

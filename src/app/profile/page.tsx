@@ -163,6 +163,8 @@ export default function ProfilePage() {
                     locale={{ emptyText: <Empty description="Chưa có sản phẩm nào" /> }}
                     renderItem={(item: any) => {
                       const status = getProductStatus(item, item.order);
+                      const hasReplacement = item.warranty_units?.some((u: any) => u.status === 'REPLACED');
+
                       return (
                         <List.Item
                           actions={[
@@ -183,7 +185,12 @@ export default function ProfilePage() {
                             description={
                               <Space direction="vertical" size={4}>
                                 <Text>Số lượng: {item.quantity}</Text>
-                                <Tag color={status.color}>{status.text}</Tag>
+                                <Space wrap>
+                                  <Tag color={status.color}>{status.text}</Tag>
+                                  {hasReplacement && (
+                                    <Tag color="purple">Đã đổi bảo hành</Tag>
+                                  )}
+                                </Space>
                               </Space>
                             }
                           />

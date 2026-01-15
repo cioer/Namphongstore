@@ -69,10 +69,47 @@ export default function ProductReviews({ productId, productName }: ProductReview
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
+  
+  // New states for auth and purchase check
+  const [user, setUser] = useState<any>(null);
+  const [canReview, setCanReview] = useState(false);
+  const [reviewCheckMessage, setReviewCheckMessage] = useState('');
+  const [reviewCheckReason, setReviewCheckReason] = useState('');
 
   useEffect(() => {
     fetchReviews();
+    checkAuth();
   }, [productId]);
+
+  useEffect(() => {
+    if (user) {
+      checkReviewEligibility();
+    }
+  }, [user, productId]);
+
+  const checkAuth = async () => {
+    try {
+      const response = await fetch('/api/auth/me');
+      const data = await response.json();
+      setUser(data.user);
+    } catch (error) {
+      console.error('Error checking auth:', error);
+      setUser(null);
+    }
+  };
+
+  const checkReviewEligibility = async () => {
+    try {
+      const response = await fetch(`/api/reviews/check?product_id=${productId}`);
+      const data = await response.json();
+      setCanReview(data.canReview);
+      setReviewCheckMessage(data.message);
+      setReviewCheckReason(data.reason);
+    } catch (error) {
+      console.error('Error checking review eligibility:', error);
+      setCanReview(false);
+    }
+  };
 
   const fetchReviews = async () => {
     setLoading(true);
@@ -100,8 +137,6 @@ export default function ProductReviews({ productId, productName }: ProductReview
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           product_id: productId,
-          customer_name: values.customer_name,
-          customer_phone: values.customer_phone,
           rating: values.rating,
           comment: values.comment,
         }),
@@ -195,13 +230,52 @@ export default function ProductReviews({ productId, productName }: ProductReview
           </Col>
           
           <Col span={4} style={{ textAlign: 'right' }}>
-            <Button 
-              type="primary" 
-              icon={<EditOutlined />}
-              onClick={openReviewModal}
-            >
-              Viết đánh giá
-            </Button>
+            {!user ? (
+              <Button 
+                type="default" 
+                icon={<EditOutlined />}
+                onClick={() => {
+                  message.info('Vui lòng đăng nhập để đánh giá sản phẩm');
+                  window.location.href = '/login';
+                }}
+              >
+                Viết đánh giá
+              </Button>
+            ) : canReview ? (
+              <Button 
+                type="primary" 
+                icon={<EditOutlined />}
+                onClick={openReviewModal}
+              >
+                Viết đánh giá
+              </Button>
+            ) : (
+              <Button 
+                type="default" 
+                icon={<EditOutlined />}
+                onClick={() => {
+                  if (reviewCheckReason === 'ALREADY_REVIEWED') {
+                    message.info(reviewCheckMessage);
+                  } else if (reviewCheckReason === 'NOT_PURCHASED') {
+                    Modal.info({
+                      title: 'Chưa thể đánh giá',
+                      content: (
+                        <div>
+                          <p>{reviewCheckMessage}</p>
+                          <p style={{ marginTop: 12, color: '#1890ff' }}>
+                            Hãy thêm vào giỏ hàng và trải nghiệm sản phẩm này nhé!
+                          </p>
+                        </div>
+                      ),
+                    });
+                  } else {
+                    message.warning(reviewCheckMessage);
+                  }
+                }}
+              >
+                Viết đánh giá
+              </Button>
+            )}
           </Col>
         </Row>
       </Card>
@@ -286,24 +360,9 @@ export default function ProductReviews({ productId, productName }: ProductReview
           layout="vertical"
           style={{ marginTop: 16 }}
         >
-          <Form.Item
-            label="Họ tên"
-            name="customer_name"
-            rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}
-          >
-            <Input placeholder="Nhập họ tên của bạn" />
-          </Form.Item>
-          
-          <Form.Item
-            label="Số điện thoại"
-            name="customer_phone"
-            rules={[
-              { required: true, message: 'Vui lòng nhập số điện thoại' },
-              { pattern: /^[0-9]{10,11}$/, message: 'Số điện thoại không hợp lệ' }
-            ]}
-          >
-            <Input placeholder="Nhập số điện thoại" />
-          </Form.Item>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 16, fontSize: '13px' }}>
+            ✅ Bạn đang đánh giá với tài khoản: <strong>{user?.email}</strong>
+          </Text>
           
           <Form.Item
             label="Đánh giá"

@@ -20,6 +20,7 @@ export async function POST(
     // Fetch the order
     const order = await prisma.order.findUnique({
       where: { id },
+      include: { items: true },
     });
 
     if (!order) {
@@ -38,12 +39,24 @@ export async function POST(
     }
 
     // Update order status to CANCELLED_BY_CUSTOMER
-    const updatedOrder = await prisma.order.update({
-      where: { id },
-      data: {
-        status: 'CANCELLED_BY_CUSTOMER',
-        cancel_reason: reason.trim(),
-      },
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      const updated = await tx.order.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED_BY_CUSTOMER',
+          cancel_reason: reason.trim(),
+        },
+      });
+
+      // Restore stock
+      for (const item of order.items) {
+        await tx.product.update({
+          where: { id: item.product_id },
+          data: { stock_quantity: { increment: item.quantity } },
+        });
+      }
+
+      return updated;
     });
 
     return NextResponse.json({

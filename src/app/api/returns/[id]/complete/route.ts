@@ -70,6 +70,25 @@ export async function POST(
       );
     }
 
+    // Enforce warranty exchange policy: only allow replacement within exchange_until
+    const nowPolicyCheck = new Date();
+    // Use type assertion to avoid stale type errors if editor hasn't reloaded
+    const exchangeUntil = (oldWarrantyUnit as any).exchange_until;
+    
+    if (exchangeUntil && nowPolicyCheck > new Date(exchangeUntil)) {
+      return NextResponse.json(
+        { 
+          error: 'Hết thời hạn đổi sản phẩm mới. Vui lòng tạo yêu cầu sửa chữa tại nhà theo chính sách bảo hành.',
+          policy: {
+            phase: 'REPAIR',
+            exchange_until: exchangeUntil,
+            warranty_end: oldWarrantyUnit.end_date,
+          }
+        },
+        { status: 400 }
+      );
+    }
+
     // Complete replacement with new warranty creation
     const result = await prisma.$transaction(async (tx: TransactionClient) => {
       // Create new warranty unit
@@ -86,8 +105,9 @@ export async function POST(
           warranty_months_at_purchase: oldWarrantyUnit.warranty_months_at_purchase,
           start_date: now,
           end_date: endDate,
+          exchange_until: (oldWarrantyUnit as any).exchange_until, // preserve original exchange deadline
           status: 'ACTIVE',
-        },
+        } as any, // Cast to any to avoid stale type errors in editor
       });
 
       // Update old warranty unit to link to new one

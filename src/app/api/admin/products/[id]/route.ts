@@ -82,6 +82,7 @@ export async function PUT(
       promo_start,
       promo_end,
       warranty_months,
+      warranty_exchange_months,
       stock_quantity,
       is_active,
     } = body;
@@ -125,6 +126,7 @@ export async function PUT(
       promo_start: promo_start ? new Date(promo_start) : null,
       promo_end: promo_end ? new Date(promo_end) : null,
       warranty_months: Number(warranty_months) || 12,
+      warranty_exchange_months: Number(warranty_exchange_months) || 1,
       stock_quantity: Number(stock_quantity) || 0,
       is_active: is_active !== false,
     };

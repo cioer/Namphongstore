@@ -57,6 +57,10 @@ export const createOrder = async (data: any) => {
       throw new Error(`Product ${item.productId} not found`);
     }
 
+    if (product.stock_quantity < item.quantity) {
+      throw new Error(`Sản phẩm "${product.name}" không đủ hàng trong kho (chỉ còn ${product.stock_quantity})`);
+    }
+
     const unitPrice = Number(product.price_sale);
     subTotal += unitPrice * item.quantity;
 
@@ -82,6 +86,7 @@ export const createOrder = async (data: any) => {
       unit_price_at_purchase: unitPrice,
       promo_snapshot: promoSnapshot,
       warranty_months_snapshot: product.warranty_months,
+      warranty_exchange_months_snapshot: (product as any).warranty_exchange_months ?? 1,
     };
   });
 
@@ -178,6 +183,14 @@ export const createOrder = async (data: any) => {
         },
       },
     });
+
+    // Update product stock
+    for (const item of orderItemsData) {
+      await tx.product.update({
+        where: { id: item.product_id },
+        data: { stock_quantity: { decrement: item.quantity } },
+      });
+    }
 
     // If coupon used, update usage
     if (couponId) {

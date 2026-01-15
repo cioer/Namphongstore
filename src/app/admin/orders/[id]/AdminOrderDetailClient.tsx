@@ -15,6 +15,7 @@ import {
   Timeline,
   Tag,
   Divider,
+  Alert,
 } from 'antd';
 import { Typography } from 'antd';
 import {
@@ -22,6 +23,7 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   CloseCircleOutlined,
+  StopOutlined,
 } from '@ant-design/icons';
 import { formatVND } from '@/lib/utils';
 import Link from 'next/link';
@@ -29,6 +31,7 @@ import Link from 'next/link';
 const { Title, Text } = Typography;
 
 const { TextArea } = Input;
+
 
 interface User {
   full_name: string;
@@ -106,6 +109,7 @@ const warrantyStatusConfig: Record<string, { color: string; text: string }> = {
   ACTIVE: { color: 'green', text: 'Còn hạn' },
   EXPIRED: { color: 'red', text: 'Hết hạn' },
   REPLACED: { color: 'orange', text: 'Đã thay thế' },
+  VOIDED: { color: 'magenta', text: 'Đã chấm dứt' },
 };
 
 export default function AdminOrderDetailClient({ order }: { order: Order }) {
@@ -114,6 +118,11 @@ export default function AdminOrderDetailClient({ order }: { order: Order }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState('');
   const [note, setNote] = useState('');
+
+  // Terminate Warranty State
+  const [terminateModalVisible, setTerminateModalVisible] = useState(false);
+  const [terminateReason, setTerminateReason] = useState('');
+  const [selectedWarranty, setSelectedWarranty] = useState<WarrantyUnit | null>(null);
 
   const isDelivered = order.status === 'DELIVERED';
   const isCancelled = order.status.includes('CANCELLED');
@@ -160,6 +169,80 @@ export default function AdminOrderDetailClient({ order }: { order: Order }) {
       message.success(data.message || 'Cập nhật thành công!');
       setModalVisible(false);
       setNote('');
+      router.refresh();
+    } catch (error) {
+      message.error('Có lỗi xảy ra');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleTerminateWarranty = async () => {
+    if (!selectedWarranty) return;
+
+    if (!terminateReason.trim()) {
+      message.error('Vui lòng nhập lý do');
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const response = await fetch(`/api/admin/warranty/${selectedWarranty.id}/terminate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason: terminateReason.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        message.error(data.error || 'Thất bại');
+        return;
+      }
+
+      message.success('Đã chấm dứt bảo hành');
+      setTerminateModalVisible(false);
+      setTerminateReason('');
+      setSelectedWarranty(null);
+      router.refresh();
+    } catch (error) {
+      message.error('Có lỗi xảy ra');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleVoidExchange = async () => {
+    if (!selectedWarranty) return;
+
+    if (!terminateReason.trim()) {
+      message.error('Vui lòng nhập lý do');
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const response = await fetch(`/api/admin/warranty/${selectedWarranty.id}/void-exchange`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason: terminateReason.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        message.error(data.error || 'Thất bại');
+        return;
+      }
+
+      message.success('Đã chấm dứt quyền đổi trả 1-1');
+      setTerminateModalVisible(false);
+      setTerminateReason('');
+      setSelectedWarranty(null);
       router.refresh();
     } catch (error) {
       message.error('Có lỗi xảy ra');
@@ -258,6 +341,25 @@ export default function AdminOrderDetailClient({ order }: { order: Order }) {
         <Tag color={warrantyStatusConfig[status]?.color || 'default'}>
           {warrantyStatusConfig[status]?.text || status}
         </Tag>
+      ),
+    },
+    {
+      title: 'Thao tác',
+      key: 'action',
+      render: (record: WarrantyUnit) => (
+         record.status === 'ACTIVE' && (
+           <Button
+             danger
+             size="small"
+             icon={<StopOutlined />}
+             onClick={() => {
+               setSelectedWarranty(record);
+               setTerminateModalVisible(true);
+             }}
+           >
+             Kết thúc
+           </Button>
+         )
       ),
     },
   ];
@@ -438,6 +540,63 @@ export default function AdminOrderDetailClient({ order }: { order: Order }) {
           rows={3}
           value={note}
           onChange={(e) => setNote(e.target.value)}
+        />
+      </Modal>
+
+      {/* Terminate Warranty Modal */}
+      <Modal
+        title="Quản lý hiệu lực bảo hành"
+        open={terminateModalVisible}
+        onCancel={() => {
+            setTerminateModalVisible(false);
+            setTerminateReason('');
+            setSelectedWarranty(null);
+        }}
+        footer={[
+          <Button key="cancel" onClick={() => setTerminateModalVisible(false)}>
+            Hủy
+          </Button>,
+          <Button 
+            key="void_exchange" 
+            type="primary" 
+            danger 
+            onClick={handleVoidExchange}
+            loading={updating}
+            ghost
+          >
+            Chấm dứt Đổi trả 1-1
+          </Button>,
+          <Button 
+            key="void_warranty" 
+            type="primary" 
+            danger 
+            onClick={handleTerminateWarranty}
+            loading={updating}
+          >
+            Chấm dứt TOÀN BỘ Bảo hành
+          </Button>,
+        ]}
+      >
+        <Alert 
+          message="Vui lòng chọn loại hình chấm dứt hiệu lực" 
+          description={
+            <ul>
+                <li><b>Chấm dứt Đổi trả 1-1:</b> Khách không còn quyền đổi trả nhưng vẫn được bảo hành kỹ thuật.</li>
+                <li><b>Chấm dứt TOÀN BỘ:</b> Khách mất mọi quyền lợi bảo hành (Void).</li>
+            </ul>
+          }
+          type="warning" 
+          showIcon 
+          style={{ marginBottom: 16 }}
+        />
+        <div style={{ marginBottom: 8 }}>
+          <Text strong>Lý do (bắt buộc):</Text>
+        </div>
+        <TextArea
+          rows={3}
+          value={terminateReason}
+          onChange={(e) => setTerminateReason(e.target.value)}
+          placeholder="Nhập lý do vi phạm hoặc chấm dứt..."
         />
       </Modal>
     </div>

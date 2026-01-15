@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
       category_id,
       name,
       slug,
+      sku,
       brand,
       description,
       specs,
@@ -82,6 +83,7 @@ export async function POST(request: NextRequest) {
       promo_start,
       promo_end,
       warranty_months,
+      warranty_exchange_months,
       stock_quantity,
       is_active,
     } = body;
@@ -106,11 +108,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check SKU uniqueness if provided
+    if (sku) {
+      const existingSku = await prisma.product.findUnique({
+        where: { sku },
+      });
+
+      if (existingSku) {
+        return NextResponse.json(
+          { error: 'SKU already exists' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Create product with audit log
     const result = await createProductWithAudit({
       category_id,
       name,
       slug,
+      sku: sku || null,
       brand: brand || null,
       description: description || null,
       specs: specs || null,
@@ -122,6 +139,7 @@ export async function POST(request: NextRequest) {
       promo_start,
       promo_end,
       warranty_months,
+      warranty_exchange_months,
       stock_quantity,
       is_active: is_active !== false,
     }, user.id);

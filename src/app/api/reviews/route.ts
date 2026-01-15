@@ -79,20 +79,37 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const sessionId = request.cookies.get('customer_session')?.value;
+    if (!sessionId) {
+      return NextResponse.json(
+        { error: 'Vui lòng đăng nhập để đánh giá sản phẩm' },
+        { status: 401 }
+      );
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Phiên đăng nhập không hợp lệ' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { 
       product_id, 
-      customer_name, 
-      customer_phone, 
       rating, 
       comment,
-      order_id 
     } = body;
 
     // Validation
-    if (!product_id || !customer_name || !customer_phone || !rating) {
+    if (!product_id || !rating) {
       return NextResponse.json(
-        { error: 'product_id, customer_name, customer_phone, and rating are required' },
+        { error: 'Vui lòng nhập đầy đủ thông tin' },
         { status: 400 }
       );
     }
@@ -108,7 +125,7 @@ export async function POST(request: NextRequest) {
     const existingReview = await prisma.review.findFirst({
       where: {
         product_id,
-        customer_phone,
+        customer_phone: user.phone || '',
       }
     });
 
@@ -119,34 +136,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if review is verified (customer actually bought this product)
-    let isVerified = false;
-    if (order_id) {
-      const order = await prisma.order.findFirst({
-        where: {
-          id: order_id,
-          customer_phone,
-          status: 'DELIVERED',
-          items: {
-            some: {
-              product_id
-            }
+    // CRITICAL: Verify that customer actually purchased this product
+    const order = await prisma.order.findFirst({
+      where: {
+        user_id: user.id,
+        status: 'DELIVERED',
+        items: {
+          some: {
+            product_id
           }
         }
-      });
-      isVerified = !!order;
+      },
+      include: {
+        items: {
+          where: { product_id },
+          select: { id: true }
+        }
+      }
+    });
+
+    if (!order) {
+      return NextResponse.json(
+        { error: 'Bạn chưa mua sản phẩm này. Chỉ khách hàng đã mua và nhận sản phẩm mới có thể đánh giá.' },
+        { status: 403 }
+      );
     }
 
-    // Create review
+    // Create review (always verified since we validated purchase)
     const review = await prisma.review.create({
       data: {
         product_id,
-        order_id: order_id || null,
-        customer_name,
-        customer_phone,
+        order_id: order.id,
+        customer_name: user.full_name,
+        customer_phone: user.phone || '',
         rating,
         comment: comment || null,
-        is_verified: isVerified,
+        is_verified: true,
       }
     });
 

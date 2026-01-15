@@ -18,6 +18,9 @@ describe('Delivered Idempotency Test', () => {
     await prisma.warrantyUnit.deleteMany({});
     await prisma.orderItem.deleteMany({});
     await prisma.order.deleteMany({});
+    await prisma.auditLog.deleteMany({});
+    await prisma.review.deleteMany({});
+    await prisma.inventoryItem.deleteMany({});
     await prisma.product.deleteMany({});
 
     // Create test category
@@ -102,6 +105,8 @@ describe('Delivered Idempotency Test', () => {
       const warrantyCode = `NP-WTY-TEST-${Date.now()}-${unitNo}`;
       const endDate = new Date(deliveredDate);
       endDate.setMonth(endDate.getMonth() + orderItem!.warranty_months_snapshot);
+      const exchangeUntil = new Date(deliveredDate);
+      exchangeUntil.setMonth(exchangeUntil.getMonth() + 1);
 
       const warranty = await prisma.warrantyUnit.create({
         data: {
@@ -111,6 +116,7 @@ describe('Delivered Idempotency Test', () => {
           warranty_months_at_purchase: orderItem!.warranty_months_snapshot,
           start_date: deliveredDate,
           end_date: endDate,
+          exchange_until: exchangeUntil,
           status: 'ACTIVE',
         },
       });

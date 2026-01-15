@@ -59,9 +59,9 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
       label: 'Mô tả sản phẩm',
       children: (
         <div style={{ padding: '20px' }}>
-          <p style={{ fontSize: '16px', lineHeight: '1.8' }}>
+          <div style={{ fontSize: '16px', lineHeight: '1.8', whiteSpace: 'pre-wrap', color: '#333' }}>
             {product.description || 'Thông tin mô tả sản phẩm đang được cập nhật.'}
-          </p>
+          </div>
         </div>
       ),
     },

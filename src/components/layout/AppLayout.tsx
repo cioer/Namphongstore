@@ -25,8 +25,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </Layout.Content>
         {/* Only show footer for non-admin pages */}
         {!isAdminPage && (
-          <Layout.Footer style={{ textAlign: 'center', background: '#001529', color: '#fff' }}>
-            Điện máy Nam Phong ©{new Date().getFullYear()} - Uy tín, Chất lượng
+          <Layout.Footer style={{ textAlign: 'center', background: '#8B0000', color: '#FFFDF5', padding: '24px 50px', borderTop: '4px solid #D4AF37' }}>
+            <div style={{ marginBottom: 16 }}>
+              <a href="/chinh-sach-bao-hanh" style={{ color: '#D4AF37', textDecoration: 'underline' }}>Chính sách bảo hành</a>
+              <span style={{ margin: '0 8px', color: '#D4AF37' }}>|</span>
+              <span style={{ color: '#FFFDF5' }}>Hotline Tết: 1900-1234</span>
+            </div>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: '16px', color: '#D4AF37' }}>
+              Điện máy Nam Phong ©{new Date().getFullYear()} - Kính Chúc Quý Khách An Khang Thịnh Vượng
+            </div>
           </Layout.Footer>
         )}
       </Layout>

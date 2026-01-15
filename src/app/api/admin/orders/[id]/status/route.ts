@@ -113,6 +113,10 @@ export async function POST(
             const warrantyCode = generateWarrantyCode();
             const endDate = new Date(deliveredDate);
             endDate.setMonth(endDate.getMonth() + item.warranty_months_snapshot);
+            const exchangeUntil = new Date(deliveredDate);
+            // fallback to 1 month if snapshot missing
+            const exchangeMonths = (item as any).warranty_exchange_months_snapshot ?? 1;
+            exchangeUntil.setMonth(exchangeUntil.getMonth() + exchangeMonths);
 
             warrantyUnitsToCreate.push({
               order_item_id: item.id,
@@ -121,6 +125,7 @@ export async function POST(
               warranty_months_at_purchase: item.warranty_months_snapshot,
               start_date: deliveredDate,
               end_date: endDate,
+              exchange_until: exchangeUntil,
               status: 'ACTIVE',
             });
 
@@ -189,6 +194,16 @@ export async function POST(
         where: { id: params.id },
         data: { status: new_status },
       });
+
+      // Restore stock if cancelling
+      if (new_status === 'CANCELLED_BY_SHOP' || new_status === 'CANCELLED_BY_CUSTOMER') {
+        for (const item of order.items) {
+          await tx.product.update({
+            where: { id: item.product_id },
+            data: { stock_quantity: { increment: item.quantity } },
+          });
+        }
+      }
 
       await tx.eventLog.create({
         data: {

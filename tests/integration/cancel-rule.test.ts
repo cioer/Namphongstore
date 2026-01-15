@@ -15,6 +15,9 @@ describe('Cancel Rule Test', () => {
     await prisma.warrantyUnit.deleteMany({});
     await prisma.orderItem.deleteMany({});
     await prisma.order.deleteMany({});
+    await prisma.auditLog.deleteMany({});
+    await prisma.review.deleteMany({});
+    await prisma.inventoryItem.deleteMany({});
     await prisma.product.deleteMany({});
 
     // Create test category

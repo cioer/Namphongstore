@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Layout, Input, Badge, Button, Space, Drawer, Typography, Dropdown, Menu, Avatar } from 'antd';
 import { SearchOutlined, ShoppingCartOutlined, PhoneOutlined, MenuOutlined, UserOutlined, LogoutOutlined, ProfileOutlined } from '@ant-design/icons';
+import NotificationBell from './NotificationBell';
 
 const { Header: AntHeader } = Layout;
 const { Search } = Input;
@@ -73,29 +74,37 @@ export default function Header() {
 
   return (
     <>
-      <AntHeader style={{ 
-        background: '#fff', 
+      <AntHeader className="tet-header-bg" style={{ 
         padding: '0 16px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        boxShadow: '0 2px 8px rgba(215, 0, 24, 0.2)',
         position: 'sticky',
         top: 0,
         zIndex: 1000,
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between'
+        justifyContent: 'space-between',
+        height: 'auto',
+        minHeight: '64px'
       }}>
         {/* Desktop Logo */}
-        <Link href="/" style={{ display: 'flex', alignItems: 'center' }}>
-          <h1 style={{ 
-            margin: 0, 
-            color: '#1890ff',
-            fontSize: '20px',
-            fontWeight: 'bold'
-          }}>
-            <span style={{ display: 'inline-block' }}>⚡</span>
-            <span className="desktop-text">Điện máy Nam Phong</span>
-            <span className="mobile-text">Nam Phong</span>
-          </h1>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <h1 style={{ 
+              margin: 0, 
+              color: '#D4AF37',
+              fontSize: '24px',
+              fontFamily: "'Playfair Display', serif",
+              fontWeight: 700,
+              lineHeight: 1
+            }}>
+              <span style={{ display: 'inline-block', marginRight: 8 }}>🧧</span>
+              <span className="desktop-text">NAM PHONG</span>
+              <span className="mobile-text">NP Store</span>
+            </h1>
+            <span style={{ fontSize: '12px', color: '#FFFDF5', fontStyle: 'italic', marginLeft: '36px' }} className="desktop-text">
+              Tết Sum Vầy - Lộc Đầy Nhà
+            </span>
+          </div>
         </Link>
 
         {/* Desktop Search */}
@@ -122,32 +131,38 @@ export default function Header() {
           gap: '16px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <PhoneOutlined style={{ fontSize: '18px', color: '#ff4d4f', marginRight: '6px' }} />
+            <PhoneOutlined style={{ fontSize: '18px', color: '#D4AF37', marginRight: '6px' }} />
             <div>
-              <div style={{ fontSize: '11px', color: '#666', lineHeight: 1 }}>Hotline</div>
-              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#ff4d4f', lineHeight: 1 }}>
-                1900-xxxx
+              <div style={{ fontSize: '11px', color: '#FFFDF5', lineHeight: 1 }}>Hotline Tết</div>
+              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#D4AF37', lineHeight: 1 }}>
+                1900-1234
               </div>
             </div>
           </div>
 
+          {user && (
+            <div style={{ marginRight: 8 }}>
+              <NotificationBell />
+            </div>
+          )}
+
           {user ? (
             <Dropdown overlay={userMenu} placement="bottomRight">
               <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#1890ff' }} />
-                <span style={{ fontWeight: 500 }}>{user.full_name}</span>
+                <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#D4AF37', color: '#D70018' }} />
+                <span style={{ fontWeight: 500, color: '#FFFDF5' }}>{user.full_name}</span>
               </div>
             </Dropdown>
           ) : (
             <Link href="/login">
-              <Button icon={<UserOutlined />}>Đăng nhập</Button>
+              <Button ghost icon={<UserOutlined />} style={{ color: '#FFFDF5', borderColor: '#D4AF37' }}>Đăng nhập</Button>
             </Link>
           )}
           
           <Link href="/cart">
             <Badge count={cartCount} showZero>
               <Button 
-                type="primary" 
+                style={{ backgroundColor: '#D4AF37', color: '#D70018', border: 'none', fontWeight: 'bold' }}
                 icon={<ShoppingCartOutlined />} 
                 size="large"
               >
@@ -167,7 +182,7 @@ export default function Header() {
             <Badge count={cartCount} showZero size="small">
               <Button 
                 type="text" 
-                icon={<ShoppingCartOutlined />} 
+                icon={<ShoppingCartOutlined style={{ color: '#FFFDF5' }} />} 
                 size="large"
                 style={{ padding: '4px 8px' }}
               />
@@ -176,7 +191,7 @@ export default function Header() {
           
           <Button 
             type="text"
-            icon={<MenuOutlined />}
+            icon={<MenuOutlined style={{ color: '#FFFDF5' }} />}
             size="large"
             style={{ padding: '4px 8px' }}
             onClick={() => setMobileMenuVisible(true)}

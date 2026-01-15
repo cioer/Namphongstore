@@ -13,7 +13,8 @@ import {
   DatePicker,
   Select,
   Progress,
-  Button
+  Button,
+  message
 } from 'antd';
 import { 
   DollarOutlined,
@@ -28,7 +29,8 @@ import {
   AppstoreOutlined,
   FileTextOutlined,
   SafetyCertificateOutlined,
-  GiftOutlined
+  GiftOutlined,
+  HistoryOutlined
 } from '@ant-design/icons';
 import { formatVND } from '@/lib/utils';
 import dayjs from 'dayjs';
@@ -100,17 +102,6 @@ interface CancelledOrder {
   cancel_reason?: string;
 }
 
-interface CancelledOrder {
-  id: string;
-  order_code: string;
-  customer_name: string;
-  customer_phone: string;
-  total_amount: string;
-  status: string;
-  created_at: string;
-  cancel_reason?: string;
-}
-
 export default function AdminDashboard() {
   const router = useRouter();
 
@@ -159,6 +150,8 @@ export default function AdminDashboard() {
   const [recentReturns, setRecentReturns] = useState<RecentReturn[]>([]);
   const [cancelledOrders, setCancelledOrders] = useState<CancelledOrder[]>([]);
 
+  const [processingExpiry, setProcessingExpiry] = useState(false);
+
   useEffect(() => {
     fetchDashboardData();
   }, [dateRange]);
@@ -200,8 +193,6 @@ export default function AdminDashboard() {
         completed: 0
       });
       setRecentReturns(data.recentReturns || []);
-      setCancelledOrders(data.cancelledOrders || []);
-      setCancelledOrders(data.cancelledOrders || []);
       setCancelledOrders(data.cancelledOrders || []);
       
     } catch (error) {
@@ -253,6 +244,24 @@ export default function AdminDashboard() {
       ]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleScanExpiredWarranties = async () => {
+    setProcessingExpiry(true);
+    try {
+      const res = await fetch('/api/cron/check-warranty-expiry', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      if (data.processed_count > 0) {
+        message.success(`Đã xử lý ${data.processed_count} bảo hành hết hạn.`);
+      } else {
+        message.info('Không có bảo hành nào hết hạn.');
+      }
+    } catch (e) {
+      message.error('Lỗi khi quét bảo hành hết hạn');
+    } finally {
+        setProcessingExpiry(false);
     }
   };
 
@@ -517,6 +526,13 @@ export default function AdminDashboard() {
               loading={loading}
             >
               Làm mới
+            </Button>
+            <Button 
+              icon={<HistoryOutlined />} 
+              onClick={handleScanExpiredWarranties}
+              loading={processingExpiry}
+            >
+              Quét bảo hành hết hạn
             </Button>
           </Space>
         </div>

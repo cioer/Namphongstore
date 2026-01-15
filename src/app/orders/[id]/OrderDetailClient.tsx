@@ -55,6 +55,7 @@ const warrantyStatusConfig: Record<string, { label: string; color: string }> = {
   ACTIVE: { label: 'Còn hạn', color: 'green' },
   EXPIRED: { label: 'Hết hạn', color: 'red' },
   REPLACED: { label: 'Đã thay thế', color: 'orange' },
+  VOIDED: { label: 'Bị từ chối (Void)', color: 'volcano' },
 };
 
 const returnStatusConfig: Record<string, { label: string; color: string }> = {
@@ -79,6 +80,11 @@ export default function OrderDetailClient({ order }: OrderDetailClientProps) {
   const [selectedWarrantyUnit, setSelectedWarrantyUnit] = useState<string | null>(null);
   const [returns, setReturns] = useState<any[]>([]);
 
+  // Repair Request State
+  const [repairModalVisible, setRepairModalVisible] = useState(false);
+  const [repairForm] = Form.useForm();
+  const [repairing, setRepairing] = useState(false);
+
   // Declare computed values before using them
   const canCancel = order.status === 'NEW' || order.status === 'CONFIRMED';
   const isDelivered = order.status === 'DELIVERED';
@@ -102,16 +108,42 @@ export default function OrderDetailClient({ order }: OrderDetailClientProps) {
     }
   }, [isDelivered]);
 
-  // Check if within 30 days for returns
+  // Check if within exchange period (Returns)
   const canReturn = () => {
-    if (!isDelivered || !order.delivered_date) return false;
-    const deliveredDate = new Date(order.delivered_date);
+    if (!isDelivered) return false;
     const now = new Date();
-    const daysSinceDelivery = Math.floor(
-      (now.getTime() - deliveredDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    return daysSinceDelivery <= 30;
+    // Flatten all units
+    const units = order.items.flatMap((i: any) => i.warranty_units || []);
+
+    if (units.length === 0) {
+        // Fallback for orders without warranty units
+        if (!order.delivered_date) return false;
+        const deliveredDate = new Date(order.delivered_date);
+        const days = Math.floor((now.getTime() - deliveredDate.getTime()) / (1000 * 60 * 60 * 24));
+        return days <= 30;
+    }
+    
+    // Valid for exchange if any unit is in exchange period and NOT voided
+    return units.some((u: any) => {
+        if (u.status === 'VOIDED') return false;
+        return u.exchange_until && new Date(u.exchange_until) > now;
+    });
   };
+
+  // Check if eligible for Repair/Warranty (Services)
+  const canRepair = () => {
+    if (!isDelivered) return false;
+    const now = new Date();
+    const units = order.items.flatMap((i: any) => i.warranty_units || []);
+    
+    // Valid for repair if any unit is PAST exchange but WITHIN warranty end date
+    return units.some((u: any) => {
+        if (u.status !== 'ACTIVE') return false; // Must be active (not voided/expired/replaced)
+        const exchangeEnded = !u.exchange_until || new Date(u.exchange_until) <= now;
+        const warrantyActive = new Date(u.end_date) > now;
+        return exchangeEnded && warrantyActive;
+    });
+  }
 
   // Get all warranty units for selection
   const getAllWarrantyUnits = () => {
@@ -244,6 +276,48 @@ export default function OrderDetailClient({ order }: OrderDetailClientProps) {
     }
   };
 
+  const handleSubmitRepair = async (values: any) => {
+    setRepairing(true);
+    try {
+      // Find the warranty code from the ID
+      const units = getAllWarrantyUnits();
+      const unit = units.find((u: any) => u.id === values.warranty_unit_id);
+      
+      if (!unit) {
+        throw new Error("Không tìm thấy thông tin bảo hành");
+      }
+
+      const res = await fetch('/api/warranty/service/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          warranty_code: unit.warranty_code_auto,
+          issue_description: values.issue_description,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Handle specific policy error
+        if (data.policy?.phase === 'EXCHANGE') {
+            throw new Error(data.error || 'Sản phẩm vẫn còn trong thời hạn đổi mới, vui lòng dùng chức năng Đổi trả.');
+        }
+        throw new Error(data.error || 'Gửi yêu cầu thất bại');
+      }
+
+      message.success('Đã gửi yêu cầu sửa chữa thành công! Mã: ' + data.service.id);
+      setRepairModalVisible(false);
+      repairForm.resetFields();
+      // Ideally we should refresh the order or show a list of services.
+      // For now, refreshing page logic or just closing.
+    } catch (error: any) {
+      message.error(error.message);
+    } finally {
+      setRepairing(false);
+    }
+  };
+
   // Warranty table columns
   const warrantyColumns = [
     {
@@ -265,16 +339,38 @@ export default function OrderDetailClient({ order }: OrderDetailClientProps) {
       render: (serial: string | null) => serial || <Typography.Text type="secondary">Chưa cập nhật</Typography.Text>,
     },
     {
-      title: 'Thời hạn',
+      title: 'Hạn dùng',
       key: 'warranty_period',
-      render: (record: any) => (
-        <div>
-          <div>{record.warranty_months_at_purchase} tháng</div>
-          <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
-            {new Date(record.start_date).toLocaleDateString('vi-VN')} - {new Date(record.end_date).toLocaleDateString('vi-VN')}
-          </Typography.Text>
-        </div>
-      ),
+      render: (record: any) => {
+        const isVoided = record.status === 'VOIDED';
+        return (
+          <Space direction="vertical" size={2}>
+            {/* Exchange Period */}
+            <Typography.Text style={{ fontSize: '13px' }}>
+              <Space>
+                 <SwapOutlined style={{ color: '#1890ff' }} />
+                 <span>Đổi trả:</span>
+                 <Typography.Text strong>
+                   {record.exchange_until ? new Date(record.exchange_until).toLocaleDateString('vi-VN') : 'N/A'}
+                 </Typography.Text>
+                 {new Date() > new Date(record.exchange_until) && <Tag color="default" style={{fontSize: 10, margin: 0}}>Hết hạn</Tag>}
+              </Space>
+            </Typography.Text>
+
+            {/* Warranty Period */}
+            <Typography.Text style={{ fontSize: '13px' }}>
+              <Space>
+                 <SafetyOutlined style={{ color: '#52c41a' }} />
+                 <span>Sửa chữa:</span>
+                 <Typography.Text strong delete={isVoided}>
+                   {new Date(record.end_date).toLocaleDateString('vi-VN')}
+                 </Typography.Text>
+                 {isVoided && <Tag color="volcano" style={{fontSize: 10, margin: 0}}>Voided</Tag>}
+              </Space>
+            </Typography.Text>
+          </Space>
+        );
+      },
     },
     {
       title: 'Trạng thái',
@@ -329,6 +425,15 @@ export default function OrderDetailClient({ order }: OrderDetailClientProps) {
               >
                 Yêu cầu đổi trả
               </Button>
+            )}
+            {canRepair() && (
+                <Button 
+                  icon={<SafetyOutlined />}
+                  onClick={() => setRepairModalVisible(true)}
+                  style={{ borderColor: '#52c41a', color: '#52c41a' }}
+                >
+                  Yêu cầu sửa chữa
+                </Button>
             )}
           </Space>
         </div>
@@ -667,16 +772,24 @@ export default function OrderDetailClient({ order }: OrderDetailClientProps) {
               value={selectedWarrantyUnit}
               onChange={setSelectedWarrantyUnit}
             >
-              {getAllWarrantyUnits().map((unit: any) => (
+              {getAllWarrantyUnits().map((unit: any) => {
+                const now = new Date();
+                const isExchangeExpired = unit.exchange_until && new Date(unit.exchange_until) <= now;
+                const isVoided = unit.status === 'VOIDED';
+                const isDisabled = unit.hasPendingReturn || isExchangeExpired || isVoided;
+                
+                return (
                 <Select.Option 
                   key={unit.id} 
                   value={unit.id}
-                  disabled={unit.hasPendingReturn}
+                  disabled={isDisabled}
                 >
-                  {unit.product_name} - {unit.warranty_code_auto} (Số {unit.unit_no})
+                  {unit.product_name} - {unit.warranty_code_auto}
                   {unit.hasPendingReturn && <Tag color="orange" style={{ marginLeft: 8 }}>Đang chờ duyệt</Tag>}
+                  {isExchangeExpired && <Tag style={{ marginLeft: 8 }}>Hết hạn đổi</Tag>}
+                  {isVoided && <Tag color="error" style={{ marginLeft: 8 }}>Void</Tag>}
                 </Select.Option>
-              ))}
+              )})}
             </Select>
           </Form.Item>
 
@@ -749,6 +862,92 @@ export default function OrderDetailClient({ order }: OrderDetailClientProps) {
                 Gửi yêu cầu
               </Button>
               <Button onClick={() => setReturnModalVisible(false)}>
+                Hủy
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Repair Request Modal */}
+      <Modal
+        title="Yêu cầu Bảo hành / Sửa chữa"
+        open={repairModalVisible}
+        onCancel={() => {
+          setRepairModalVisible(false);
+          repairForm.resetFields();
+        }}
+        footer={null}
+        width={700}
+      >
+        <Alert
+          message="Chính sách bảo hành sửa chữa"
+          description="Áp dụng cho sản phẩm đã hết hạn đổi trả nhưng còn trong thời hạn bảo hành. Sản phẩm sẽ được tiếp nhận và sửa chữa theo quy định."
+          type="warning"
+          showIcon
+          icon={<SafetyOutlined />}
+          style={{ marginBottom: 16 }}
+        />
+
+        <Form
+          form={repairForm}
+          layout="vertical"
+          onFinish={handleSubmitRepair}
+        >
+          <Form.Item
+            label="Chọn mã bảo hành"
+            name="warranty_unit_id"
+            rules={[{ required: true, message: 'Vui lòng chọn sản phẩm cần bảo hành' }]}
+          >
+            <Select
+              placeholder="Chọn sản phẩm..."
+            >
+              {getAllWarrantyUnits()
+                .filter((u: any) => {
+                   // Filter logic: Only show units eligible for repair
+                   // i.e. Exchange expired (or null) AND Warranty active
+                   const now = new Date();
+                   const exchangeEnded = !u.exchange_until || new Date(u.exchange_until) <= now;
+                   const warrantyActive = new Date(u.end_date) > now;
+                   const isActive = u.status === 'ACTIVE';
+                   return exchangeEnded && warrantyActive && isActive;
+                })
+                .map((unit: any) => (
+                <Select.Option 
+                  key={unit.id} 
+                  value={unit.id}
+                >
+                  {unit.product_name} - {unit.warranty_code_auto} (Hết hạn: {new Date(unit.end_date).toLocaleDateString('vi-VN')})
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            label="Mô tả sự cố"
+            name="issue_description"
+            rules={[
+              { required: true, message: 'Vui lòng mô tả chi tiết lỗi gặp phải' },
+              { min: 10, message: 'Mô tả phải có ít nhất 10 ký tự' },
+            ]}
+          >
+            <TextArea
+              placeholder="Mô tả chi tiết tình trạng lỗi của sản phẩm..."
+              rows={4}
+            />
+          </Form.Item>
+
+          <Form.Item>
+            <Space>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={repairing}
+                icon={<SafetyOutlined />}
+              >
+                Gửi yêu cầu bảo hành
+              </Button>
+              <Button onClick={() => setRepairModalVisible(false)}>
                 Hủy
               </Button>
             </Space>
