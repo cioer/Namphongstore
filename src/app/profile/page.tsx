@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Typography, Tabs, List, Tag, Button, Space, Spin, Descriptions, Avatar, Empty } from 'antd';
-import { UserOutlined, ShoppingOutlined, LogoutOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { Card, Typography, Tabs, List, Tag, Button, Space, Spin, Descriptions, Avatar, Empty, Modal, Form, Input, message } from 'antd';
+import { UserOutlined, ShoppingOutlined, LogoutOutlined, AppstoreOutlined, EditOutlined, KeyOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatVND, getFirstImage } from '@/lib/utils';
@@ -17,6 +17,13 @@ export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [isChangePassModalOpen, setIsChangePassModalOpen] = useState(false);
+  const [changingPass, setChangingPass] = useState(false);
+  const [form] = Form.useForm();
+  const [formPass] = Form.useForm();
+  
   const router = useRouter();
 
   useEffect(() => {
@@ -49,6 +56,70 @@ export default function ProfilePage() {
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     window.location.href = '/login';
+  };
+
+  const showEditModal = () => {
+    form.setFieldsValue({
+      full_name: user.full_name,
+      phone: user.phone,
+      address: user.address,
+      city: user.city,
+      district: user.district,
+      ward: user.ward,
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleUpdate = async (values: any) => {
+    setUpdating(true);
+    try {
+      const res = await fetch('/api/profile/update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      });
+
+      if (!res.ok) throw new Error('Cập nhật thất bại');
+      
+      const data = await res.json();
+      setUser(data.user);
+      message.success('Cập nhật thông tin thành công!');
+      setIsModalOpen(false);
+    } catch (error) {
+      message.error('Có lỗi xảy ra khi cập nhật.');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleChangePassword = async (values: any) => {
+    if (values.newPassword !== values.confirmPassword) {
+      message.error('Mật khẩu xác nhận không khớp');
+      return;
+    }
+
+    setChangingPass(true);
+    try {
+      const res = await fetch('/api/profile/change-password', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: values.currentPassword,
+          newPassword: values.newPassword
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Đổi mật khẩu thất bại');
+      
+      message.success('Đổi mật khẩu thành công');
+      setIsChangePassModalOpen(false);
+      formPass.resetFields();
+    } catch (error: any) {
+      message.error(error.message);
+    } finally {
+      setChangingPass(false);
+    }
   };
 
   if (loading) {
@@ -142,12 +213,137 @@ export default function ProfilePage() {
             <Avatar size={64} icon={<UserOutlined />} style={{ marginBottom: 16 }} />
             <Title level={4}>{user?.full_name}</Title>
             <Text type="secondary">{user?.email}</Text>
+            <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Button block icon={<EditOutlined />} onClick={showEditModal}>
+                Sửa thông tin
+              </Button>
+              <Button block icon={<KeyOutlined />} onClick={() => setIsChangePassModalOpen(true)}>
+                Đổi mật khẩu
+              </Button>
+            </div>
           </div>
           <Descriptions column={1} bordered size="small">
             <Descriptions.Item label="Số điện thoại">{user?.phone || 'Chưa cập nhật'}</Descriptions.Item>
             <Descriptions.Item label="Địa chỉ">{user?.address || 'Chưa cập nhật'}</Descriptions.Item>
+            <Descriptions.Item label="Thành phố">{user?.city || 'Chưa cập nhật'}</Descriptions.Item>
+            <Descriptions.Item label="Quận/Huyện">{user?.district || 'Chưa cập nhật'}</Descriptions.Item>
+            <Descriptions.Item label="Phường/Xã">{user?.ward || 'Chưa cập nhật'}</Descriptions.Item>
           </Descriptions>
         </Card>
+
+        <Modal
+          title="Cập nhật thông tin cá nhân"
+          open={isModalOpen}
+          onCancel={() => setIsModalOpen(false)}
+          footer={null}
+        >
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handleUpdate}
+          >
+            <Form.Item
+              name="full_name"
+              label="Họ tên"
+              rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}
+            >
+              <Input />
+            </Form.Item>
+
+            <Form.Item
+              name="phone"
+              label="Số điện thoại"
+              rules={[
+                { pattern: /^[0-9]{10}$/, message: 'Số điện thoại không hợp lệ' }
+              ]}
+            >
+              <Input />
+            </Form.Item>
+
+            <Form.Item name="address" label="Địa chỉ cụ thể">
+              <Input.TextArea rows={2} />
+            </Form.Item>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <Form.Item name="city" label="Tỉnh/Thành phố">
+                <Input />
+              </Form.Item>
+              <Form.Item name="district" label="Quận/Huyện">
+                <Input />
+              </Form.Item>
+            </div>
+
+            <Form.Item name="ward" label="Phường/Xã">
+              <Input />
+            </Form.Item>
+
+            <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+              <Space>
+                <Button onClick={() => setIsModalOpen(false)}>Hủy</Button>
+                <Button type="primary" htmlType="submit" loading={updating}>
+                  Lưu thay đổi
+                </Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        <Modal
+          title="Đổi mật khẩu"
+          open={isChangePassModalOpen}
+          onCancel={() => setIsChangePassModalOpen(false)}
+          footer={null}
+        >
+          <Form
+            form={formPass}
+            layout="vertical"
+            onFinish={handleChangePassword}
+          >
+            <Form.Item
+              name="currentPassword"
+              label="Mật khẩu hiện tại"
+              rules={[{ required: true, message: 'Vui lòng nhập mật khẩu hiện tại' }]}
+            >
+              <Input.Password />
+            </Form.Item>
+
+            <Form.Item
+              name="newPassword"
+              label="Mật khẩu mới"
+              rules={[{ required: true, message: 'Vui lòng nhập mật khẩu mới' }]}
+            >
+              <Input.Password />
+            </Form.Item>
+
+            <Form.Item
+              name="confirmPassword"
+              label="Xác nhận mật khẩu mới"
+              dependencies={['newPassword']}
+              rules={[
+                { required: true, message: 'Vui lòng xác nhận mật khẩu' },
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!value || getFieldValue('newPassword') === value) {
+                      return Promise.resolve();
+                    }
+                    return Promise.reject(new Error('Mật khẩu xác nhận không khớp!'));
+                  },
+                }),
+              ]}
+            >
+              <Input.Password />
+            </Form.Item>
+
+            <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+              <Space>
+                <Button onClick={() => setIsChangePassModalOpen(false)}>Hủy</Button>
+                <Button type="primary" htmlType="submit" loading={changingPass}>
+                  Đổi mật khẩu
+                </Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        </Modal>
 
         {/* Main Content */}
         <Card style={{ flex: 1 }}>

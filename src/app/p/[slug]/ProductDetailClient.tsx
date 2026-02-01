@@ -31,25 +31,17 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
     new Date() <= new Date(product.promo_end);
 
   const handleBuyNow = () => {
-    const cart = JSON.parse(localStorage.getItem('cart') || '[]');
-    const existingItem = cart.find((item: any) => item.productId === product.id);
-    
-    if (existingItem) {
-      existingItem.quantity += 1;
-    } else {
-      cart.push({
-        productId: product.id,
-        name: product.name,
-        slug: product.slug,
-        price: product.price_sale,
-        quantity: 1,
-        image: getFirstImage(product.images),
-      });
-    }
-    
-    localStorage.setItem('cart', JSON.stringify(cart));
-    window.dispatchEvent(new Event('cartUpdated'));
-    
+    const newItem = {
+      productId: product.id,
+      name: product.name,
+      slug: product.slug,
+      price: product.price_sale,
+      quantity: 1,
+      image: getFirstImage(product.images),
+    };
+
+    // Set checkout items to only this product
+    localStorage.setItem('checkout_items', JSON.stringify([newItem]));
     router.push('/checkout');
   };
 

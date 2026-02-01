@@ -74,9 +74,16 @@ export default function LoginPage() {
           <Form.Item
             name="password"
             rules={[{ required: true, message: 'Vui lòng nhập mật khẩu!' }]}
+            style={{ marginBottom: 12 }}
           >
             <Input.Password prefix={<LockOutlined />} placeholder="Mật khẩu" />
           </Form.Item>
+
+          <div style={{ textAlign: 'right', marginBottom: 24 }}>
+            <Link href="/forgot-password" style={{ fontSize: 13 }}>
+              Quên mật khẩu?
+            </Link>
+          </div>
 
           <Form.Item>
             <Button type="primary" htmlType="submit" block loading={loading}>

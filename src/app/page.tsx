@@ -44,36 +44,46 @@ function serializeCategory(c: any) {
 async function getHomeData() {
   const now = new Date();
 
-  const [categories, deals, best] = await Promise.all([
-    // Get categories
-    prisma.category.findMany({
-      orderBy: { name: 'asc' },
-      take: 6,
-    }),
-    // Get products on active promotion (deals)
-    prisma.product.findMany({
-      where: {
-        is_active: true,
-        discount_percent: { gt: 0 },
-        promo_start: { lte: now },
-        promo_end: { gte: now },
-      },
-      orderBy: { discount_percent: 'desc' },
-      take: 8,
-    }),
-    // Get best-sellers (by sales volume last month)
-    getBestSellingProducts(8),
-  ]);
+  try {
+    const [categories, deals, best] = await Promise.all([
+      // Get categories
+      prisma.category.findMany({
+        orderBy: { name: 'asc' },
+        take: 6,
+      }),
+      // Get products on active promotion (deals)
+      prisma.product.findMany({
+        where: {
+          is_active: true,
+          discount_percent: { gt: 0 },
+          promo_start: { lte: now },
+          promo_end: { gte: now },
+        },
+        orderBy: { discount_percent: 'desc' },
+        take: 8,
+      }),
+      // Get best-sellers (by sales volume last month)
+      getBestSellingProducts(8),
+    ]);
 
-  // Serialize to plain JSON to avoid RSC serialization issues
-  const serializedData = {
-    categories: categories.map(serializeCategory),
-    dealsProducts: deals.map(serializeProduct),
-    bestSellers: best.map(serializeProduct),
-  };
-  
-  // Deep clone to ensure no Prisma proxy objects remain
-  return JSON.parse(JSON.stringify(serializedData));
+    // Serialize to plain JSON to avoid RSC serialization issues
+    const serializedData = {
+      categories: categories.map(serializeCategory),
+      dealsProducts: deals.map(serializeProduct),
+      bestSellers: best.map(serializeProduct),
+    };
+    
+    // Deep clone to ensure no Prisma proxy objects remain
+    return JSON.parse(JSON.stringify(serializedData));
+  } catch (error) {
+    console.error('Failed to fetch home data:', error);
+    // Return empty data gracefully instead of crashing
+    return {
+      categories: [],
+      dealsProducts: [],
+      bestSellers: [],
+    };
+  }
 }
 
 export default async function Home() {

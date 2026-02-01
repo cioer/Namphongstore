@@ -50,12 +50,13 @@ export async function GET(request: NextRequest) {
 
     // Calculate basic stats
     const totalOrders = orders.length;
-    const deliveredOrders = orders.filter(o => o.status === 'DELIVERED');
-    const totalRevenue = deliveredOrders.reduce((sum, order) => 
+    const validStatuses = ['DELIVERED', 'SHIPPING', 'CONFIRMED'];
+    const validOrders = orders.filter(o => validStatuses.includes(o.status));
+    const totalRevenue = validOrders.reduce((sum, order) => 
       sum + parseFloat(order.total_amount.toString()), 0
     );
     const uniqueCustomers = new Set(orders.map(o => o.customer_phone)).size;
-    const averageOrderValue = totalOrders > 0 ? totalRevenue / deliveredOrders.length : 0;
+    const averageOrderValue = validOrders.length > 0 ? totalRevenue / validOrders.length : 0;
 
     // Calculate growth (compare with previous period)
     const periodLength = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
     });
 
     const prevRevenue = prevOrders
-      .filter(o => o.status === 'DELIVERED')
+      .filter(o => validStatuses.includes(o.status))
       .reduce((sum, order) => sum + parseFloat(order.total_amount.toString()), 0);
 
     const revenueGrowth = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue) * 100 : 0;
@@ -99,7 +100,7 @@ export async function GET(request: NextRequest) {
       revenue: number;
     }> = {};
 
-    deliveredOrders.forEach(order => {
+    validOrders.forEach(order => {
       order.items.forEach(item => {
         const key = item.product_id;
         if (!productSales[key]) {
@@ -117,7 +118,7 @@ export async function GET(request: NextRequest) {
     });
 
     const topProducts = Object.values(productSales)
-      .sort((a, b) => b.revenue - a.revenue)
+      .sort((a, b) => b.total_sold - a.total_sold)
       .slice(0, 5)
       .map(product => ({
         ...product,
@@ -164,10 +165,10 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Get recent orders
-    const recentOrdersData = await prisma.order.findMany({
+    // Get recent orders - Strictly chronological
+    const recentOrders = await prisma.order.findMany({
       orderBy: { created_at: 'desc' },
-      take: 50, // Fetch more to ensure we get top 10 after sorting by priority
+      take: 10,
       select: {
         id: true,
         order_code: true,
@@ -178,29 +179,6 @@ export async function GET(request: NextRequest) {
         created_at: true,
       },
     });
-
-    // Sort by status priority
-    const statusPriority: Record<string, number> = {
-      'NEW': 1,
-      'CONFIRMED': 2,
-      'SHIPPING': 3,
-      'DELIVERED': 4,
-      'CANCELLED_BY_CUSTOMER': 5,
-      'CANCELLED_BY_SHOP': 6,
-    };
-
-    const recentOrders = recentOrdersData
-      .sort((a, b) => {
-        const priorityA = statusPriority[a.status] || 999;
-        const priorityB = statusPriority[b.status] || 999;
-        
-        if (priorityA !== priorityB) {
-          return priorityA - priorityB;
-        }
-        
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      })
-      .slice(0, 10);
 
     const stats = {
       totalRevenue: Math.round(totalRevenue),

@@ -174,11 +174,10 @@ export const updateProduct = async (id: string, data: any) => {
 };
 
 export const getBestSellingProducts = async (limit: number = 8) => {
-  const now = new Date();
-  // Month is 0-indexed.
-  // If now is Jan (0), last month is Dec (-1). Date constructor handles this correctly.
-  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+  // Get best selling products from the last 30 days to match Admin Dashboard default view
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 30);
 
   // Group by product_id and count quantity
   const bestSellingItems = await prisma.orderItem.groupBy({
@@ -186,8 +185,8 @@ export const getBestSellingProducts = async (limit: number = 8) => {
     where: {
       order: {
         created_at: {
-          gte: startOfLastMonth,
-          lte: endOfLastMonth,
+          gte: startDate,
+          lte: endDate,
         },
         status: {
           in: ['CONFIRMED', 'SHIPPING', 'DELIVERED']

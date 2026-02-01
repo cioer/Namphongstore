@@ -68,9 +68,9 @@ export async function POST(
       
       if (warrantyUnit && warrantyUnit.order_item) {
         // Generate unique replacement order code
-        const timestamp = Date.now().toString().slice(-8);
+        // Keep original code structure adding suffix for tracking
         const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        const order_code = `NP${timestamp}${randomSuffix}`;
+        const order_code = `${originalOrder.order_code}-DT${randomSuffix}`;
 
         // Get product information for replacement
         const product = await tx.product.findUnique({

@@ -20,6 +20,7 @@ export default function CartPage() {
   const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   useEffect(() => {
     loadCart();
@@ -28,6 +29,8 @@ export default function CartPage() {
   const loadCart = () => {
     const cartData = JSON.parse(localStorage.getItem('cart') || '[]');
     setCart(cartData);
+    // Default select all items
+    setSelectedRowKeys(cartData.map((item: CartItem) => item.productId));
     setLoading(false);
   };
 
@@ -61,10 +64,29 @@ export default function CartPage() {
   };
 
   const calculateTotal = () => {
-    return cart.reduce((sum, item) => {
-      const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
-      return sum + (price * item.quantity);
-    }, 0);
+    return cart
+      .filter(item => selectedRowKeys.includes(item.productId))
+      .reduce((sum, item) => {
+        const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
+        return sum + (price * item.quantity);
+      }, 0);
+  };
+
+  const handleCheckout = () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('Vui lòng chọn ít nhất một sản phẩm để thanh toán');
+      return;
+    }
+    const selectedItems = cart.filter(item => selectedRowKeys.includes(item.productId));
+    localStorage.setItem('checkout_items', JSON.stringify(selectedItems));
+    router.push('/checkout');
+  };
+
+  const rowSelection = {
+    selectedRowKeys,
+    onChange: (newSelectedRowKeys: React.Key[]) => {
+      setSelectedRowKeys(newSelectedRowKeys);
+    },
   };
 
   const columns = [
@@ -188,6 +210,7 @@ export default function CartPage() {
       </Typography.Title>
 
       <Table
+        rowSelection={rowSelection}
         columns={columns}
         dataSource={cart}
         rowKey="productId"
@@ -232,9 +255,10 @@ export default function CartPage() {
             type="primary"
             size="large"
             block
-            onClick={() => router.push('/checkout')}
+            onClick={handleCheckout}
+            disabled={selectedRowKeys.length === 0}
           >
-            Tiến hành đặt hàng
+            Tiến hành đặt hàng ({selectedRowKeys.length})
           </Button>
 
           <div style={{ marginTop: '12px', fontSize: '12px', color: '#666', textAlign: 'center' }}>

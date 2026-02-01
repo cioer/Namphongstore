@@ -89,7 +89,7 @@ export default function ProductReviews({ productId, productName }: ProductReview
 
   const checkAuth = async () => {
     try {
-      const response = await fetch('/api/auth/me');
+      const response = await fetch('/api/auth/me', { credentials: 'include' });
       const data = await response.json();
       setUser(data.user);
     } catch (error) {
@@ -100,7 +100,7 @@ export default function ProductReviews({ productId, productName }: ProductReview
 
   const checkReviewEligibility = async () => {
     try {
-      const response = await fetch(`/api/reviews/check?product_id=${productId}`);
+      const response = await fetch(`/api/reviews/check?product_id=${productId}`, { credentials: 'include' });
       const data = await response.json();
       setCanReview(data.canReview);
       setReviewCheckMessage(data.message);
@@ -135,6 +135,7 @@ export default function ProductReviews({ productId, productName }: ProductReview
       const response = await fetch('/api/reviews', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           product_id: productId,
           rating: values.rating,

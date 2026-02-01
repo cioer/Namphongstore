@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Typography, Button, Form, Input, Select, Card, Divider, Space, message, Spin } from 'antd';
-import { ShoppingCartOutlined, EnvironmentOutlined } from '@ant-design/icons';
+import { Typography, Button, Form, Input, Select, Card, Divider, Space, message, Spin, InputNumber } from 'antd';
+import { ShoppingCartOutlined, EnvironmentOutlined, DeleteOutlined } from '@ant-design/icons';
 import { formatVND } from '@/lib/utils';
 
 const { Option } = Select;
@@ -100,7 +100,7 @@ export default function CheckoutPage() {
 
   const checkAuth = async () => {
     try {
-      const res = await fetch('/api/auth/me');
+      const res = await fetch('/api/auth/me', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setUser(data.user);
@@ -122,10 +122,20 @@ export default function CheckoutPage() {
   };
 
   const loadCart = () => {
-    const cartData = JSON.parse(localStorage.getItem('cart') || '[]');
+    // Try to get items specifically selected for checkout first
+    const checkoutItems = localStorage.getItem('checkout_items');
+    let cartData = [];
+
+    if (checkoutItems) {
+      cartData = JSON.parse(checkoutItems);
+    } else {
+      // Fallback to full cart if no specific checkout items found
+      cartData = JSON.parse(localStorage.getItem('cart') || '[]');
+    }
+
     if (cartData.length === 0) {
-      message.warning('Giỏ hàng trống! Vui lòng thêm sản phẩm.');
-      router.push('/');
+      message.warning('Không có sản phẩm nào để thanh toán.');
+      router.push('/cart');
       return;
     }
     setCart(cartData);
@@ -141,6 +151,27 @@ export default function CheckoutPage() {
       return Math.max(0, subtotal - appliedCoupon.discount);
     }
     return subtotal;
+  };
+
+  const updateQuantity = (productId: string, quantity: number) => {
+    if (quantity < 1) return;
+    const updatedCart = cart.map(item =>
+      item.productId === productId ? { ...item, quantity } : item
+    );
+    setCart(updatedCart);
+    localStorage.setItem('checkout_items', JSON.stringify(updatedCart));
+  };
+  
+  const removeItem = (productId: string) => {
+    const updatedCart = cart.filter(item => item.productId !== productId);
+    setCart(updatedCart);
+    localStorage.setItem('checkout_items', JSON.stringify(updatedCart));
+
+    // If no items left, redirect to cart
+    if (updatedCart.length === 0) {
+      message.info('Không còn sản phẩm nào để thanh toán');
+      router.push('/cart');
+    }
   };
 
   const handleCheckCoupon = async () => {
@@ -387,6 +418,7 @@ export default function CheckoutPage() {
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
+                  alignItems: 'center',
                   padding: '12px 0',
                   borderBottom: '1px solid #f0f0f0',
                 }}
@@ -395,8 +427,21 @@ export default function CheckoutPage() {
                   <Typography.Text strong style={{ fontSize: '14px' }}>
                     {item.name}
                   </Typography.Text>
-                  <div style={{ color: '#666', fontSize: '12px' }}>
-                    Số lượng: {item.quantity}
+                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <InputNumber
+                      size="small"
+                      min={1}
+                      max={99}
+                      value={item.quantity}
+                      onChange={(value) => updateQuantity(item.productId, value || 1)}
+                    />
+                    <Button 
+                      type="text" 
+                      danger 
+                      icon={<DeleteOutlined />} 
+                      size="small"
+                      onClick={() => removeItem(item.productId)}
+                    />
                   </div>
                 </div>
                 <Typography.Text strong style={{ color: '#ff4d4f' }}>
